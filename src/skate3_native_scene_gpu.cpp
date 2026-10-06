@@ -3687,15 +3687,11 @@ nrhi::Pipeline* EnsureScreenFxPipeline(
     desc.param_count = 2;
     desc.params[0] = {nrhi::BindingParamKind::kConstantBuffer, 0, 1,
                       nrhi::Visibility::kAll};
-    desc.params[1] = {nrhi::BindingParamKind::kTextureTable, 0, 8,
+    desc.params[1] = {nrhi::BindingParamKind::kTextureTable, 0, 3,
                       nrhi::Visibility::kPixel};
-    desc.static_sampler_count = 3;
+    desc.static_sampler_count = 1;
     desc.static_samplers[0] = {0, nrhi::Filter::kLinear,
                                nrhi::AddressMode::kClamp, 1};
-    desc.static_samplers[1] = {1, nrhi::Filter::kPoint,
-                               nrhi::AddressMode::kClamp, 1};
-    desc.static_samplers[2] = {2, nrhi::Filter::kLinear,
-                               nrhi::AddressMode::kWrap, 1};
     desc.allow_input_layout = false;
     g_r.screen_fx_layout = device->CreateBindingLayout(desc);
     if (g_r.screen_fx_layout == nullptr) return nullptr;
@@ -3778,8 +3774,7 @@ nrhi::Pipeline* EnsureScreenFxPipeline(
   const auto found = g_r.screen_fx_psos.find(key);
   if (found != g_r.screen_fx_psos.end()) return found->second;
   const char* ps_entry = fx.variant == ScreenFxVariant::kOpaque ? "ps_opaque"
-                         : fx.variant == ScreenFxVariant::kAlpha ? "ps_alpha"
-                                                                : "ps_noise";
+                         : "ps_alpha";
   nrhi::Pipeline* pso = build("screen_fx.hlsl", kScreenFxShaderSource,
                               fx.scaled_uv ? "vs_scaled" : "vs_raw", ps_entry,
                               blend);
@@ -11242,7 +11237,7 @@ bool RenderScene(const NativeGuestOutputRenderContext& context, void* /*user_dat
     }
   }
 
-  // The final gameplay/replay lens and marker transition are draw-driven,
+  // The final gameplay/replay lens effect are draw-driven,
   // independent of the editor chain and of a retained world FrameScene.
   // The current guest frame publishes kNone when no such draw occurred.
   const FrameScene::ScreenFx screen_fx = GetScreenFxSnapshot();
@@ -11252,16 +11247,10 @@ bool RenderScene(const NativeGuestOutputRenderContext& context, void* /*user_dat
     if (fx_pso != nullptr) {
       const GuestTexture* vignette =
           resolve_2d_texture(screen_fx.fetch[2], /*force_inline=*/true);
-      const GuestTexture* noise = screen_fx.variant == ScreenFxVariant::kNoise
-          ? resolve_2d_texture(screen_fx.fetch[5], /*force_inline=*/true)
-          : nullptr;
-      // A white fallback is not neutral for the vignette/noise equations.
-      // Apply only when their own captured textures have decoded.
+      // A white fallback is not neutral for the vignette equation.
+      // Apply only when its captured texture has decoded.
       if (vignette != nullptr && vignette != &g_r.white && vignette->valid &&
-          vignette->srv != nullptr &&
-          (screen_fx.variant != ScreenFxVariant::kNoise ||
-           (noise != nullptr && noise != &g_r.white && noise->valid &&
-            noise->srv != nullptr))) {
+          vignette->srv != nullptr) {
         const uint64_t cb_offset =
             uint64_t(frame_number % RendererState::kScreenFxCbRegions) *
             RendererState::kScreenFxCbSlice;
@@ -11275,7 +11264,6 @@ bool RenderScene(const NativeGuestOutputRenderContext& context, void* /*user_dat
         // otherwise-unused mip chain. Negative values retain implicit LOD.
         rows[248 * 4] = ScreenFxBaseMapLod(screen_fx.fetch[0]);
         rows[248 * 4 + 1] = ScreenFxBaseMapLod(screen_fx.fetch[2]);
-        rows[248 * 4 + 2] = ScreenFxBaseMapLod(screen_fx.fetch[5]);
         // The fullscreen triangle already samples pixel centers. Recognize
         // the captured half-texel pair from the source texture dimensions;
         // arbitrary small authored translations must remain intact.
@@ -11287,16 +11275,15 @@ bool RenderScene(const NativeGuestOutputRenderContext& context, void* /*user_dat
             std::fabs(rows[242 * 4 + 1] - 0.5f / source_h) < 1.0e-7f) {
           rows[242 * 4] = rows[242 * 4 + 1] = 0.0f;
         }
-        nrhi::TextureView* views[8] = {
-            g_r.output_srv_slot, g_r.white.srv, g_r.white.srv, g_r.white.srv,
-            g_r.white.srv, g_r.white.srv, g_r.white.srv, g_r.white.srv};
+        nrhi::TextureView* views[3] = {
+            g_r.output_srv_slot, g_r.white.srv, g_r.white.srv};
         cmd->Barrier(context.guest_output, nrhi::ResourceState::kRenderTarget,
                      nrhi::ResourceState::kPixelShaderResource);
         cmd->FlushBarriers();
         cmd->SetRenderTargets(g_r.screen_fx_input, nullptr);
         cmd->SetBindingLayout(g_r.screen_fx_layout);
         cmd->SetConstantBuffer(0, g_r.screen_fx_cb, cb_offset);
-        cmd->SetTextures(1, views, 8);
+        cmd->SetTextures(1, views, 3);
         cmd->SetViewport(viewport);
         cmd->SetScissor(scissor);
         cmd->SetPrimitiveTopology(nrhi::PrimitiveTopology::kTriangleList);
@@ -11310,9 +11297,8 @@ bool RenderScene(const NativeGuestOutputRenderContext& context, void* /*user_dat
         cmd->FlushBarriers();
         views[0] = g_r.screen_fx_input_srv;
         views[2] = vignette->srv;
-        if (noise != nullptr) views[5] = noise->srv;
         cmd->SetRenderTargets(context.guest_output, nullptr);
-        cmd->SetTextures(1, views, 8);
+        cmd->SetTextures(1, views, 3);
         cmd->SetPipeline(fx_pso);
         cmd->Draw(3, 0);
         cmd->Barrier(g_r.screen_fx_input,
@@ -11961,3 +11947,4 @@ void ResetSceneFailure() {}
 }  // namespace skate3::native_scene
 
 #endif  // REX_HAS_D3D12 || REX_HAS_VULKAN
+

@@ -449,11 +449,10 @@ struct FrameScene {
     uint32_t grain_fetch[6] = {};
   };
   PhotoFx photo_fx;
-  // Final lens/vignette/noise draw, captured independently of the photo
+  // Final lens/vignette draw, captured independently of the photo
   // editor's complete chain. GetScreenFxSnapshot also publishes it during
   // frames that retain the previous world scene.
   using ScreenFx = ScreenFxState;
-  ScreenFx screen_fx;
   std::vector<DrawItem> items;
   // MeshContexts the build-side occlusion skip left out of `items` this
   // frame (see skate3_native_render_scene_occlusion_cull_build): the

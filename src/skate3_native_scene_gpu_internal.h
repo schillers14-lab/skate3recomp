@@ -594,7 +594,7 @@ struct RendererState {
   uint32_t pfx_width = 0, pfx_height = 0;
   bool pfx_ready = false;
   bool pfx_failed = false;
-  // Final screen lens/marker transition, independent of the photo-editor
+  // Final screen lens effect, independent of the photo-editor
   // chain. Copy the finished output before sampling it to avoid RT/SRV
   // feedback. The copy target idles in RENDER_TARGET state.
   nrhi::BindingLayout* screen_fx_layout = nullptr;

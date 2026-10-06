@@ -2948,7 +2948,7 @@ void CaptureScreenFxState(uint8_t* base) {
   FrameScene::ScreenFx capture;
   capture.variant = variant;
   capture.scaled_uv = vertex == ScreenFxVertex::kScaled;
-  uint32_t raw_ps[32][4], raw_vs[8][4] = {}, raw_fetch[8][6];
+  uint32_t raw_ps[3][4], raw_vs[4][4] = {}, raw_fetch[3][6];
   if (!GuestTryCopy(raw_ps, base + ps, sizeof(raw_ps)) ||
       !GuestTryCopy(raw_fetch, base + dev + 0x480, sizeof(raw_fetch)) ||
       !GuestTryCopy(capture.render_states, base + dev + 0x2934,
@@ -2960,15 +2960,17 @@ void CaptureScreenFxState(uint8_t* base) {
   const bool have_vs = vs >= 0x10000 &&
       GuestTryCopy(raw_vs, base + vs, sizeof(raw_vs));
   if (capture.scaled_uv && !have_vs) return;
-  for (unsigned r = 0; r < 32; ++r) {
+  for (unsigned r = 0; r < 3; ++r) {
     for (unsigned lane = 0; lane < 4; ++lane) {
       capture.ps[r][lane] = std::bit_cast<float>(BSwap32(raw_ps[r][lane]));
     }
   }
-  for (unsigned r = 0; r < 8; ++r) {
+  for (unsigned r = 0; r < 4; ++r) {
     for (unsigned lane = 0; lane < 4; ++lane) {
       capture.vs[r][lane] = std::bit_cast<float>(BSwap32(raw_vs[r][lane]));
     }
+  }
+  for (unsigned r = 0; r < 3; ++r) {
     for (unsigned word = 0; word < 6; ++word) {
       capture.fetch[r][word] = BSwap32(raw_fetch[r][word]);
     }
@@ -3593,13 +3595,6 @@ bool CaptureHallOfMeatState(uint8_t* base, DrawItem& item) {
   item.char_family = 0;
   std::memcpy(item.hom_rows, rows, sizeof(rows));
   std::memcpy(item.diffuse_fetch, fetch, sizeof(fetch));
-  static std::atomic<uint64_t> captures{0};
-  const uint64_t n = captures.fetch_add(1, std::memory_order_relaxed);
-  if (n < 4) {
-    REXLOG_INFO("native-scene: HoM capture mesh={:08X} color=({:.3f},{:.3f},{:.3f}) "
-                "fresnel={:.3f} strength={:.3f} floor={:.3f} (n={})",
-                item.mesh, rows[8], rows[9], rows[10], rows[7], rows[12], rows[13], n);
-  }
   return true;
 }
 
@@ -8482,7 +8477,7 @@ void WidenPublishedCamera(FrameScene& scene, float scale) {
 void BuildFrameScene(uint8_t* base, const SubmitRecord* records, size_t count) {
   if (!SceneEnabled()) {
     // F5 can disable native rendering between capture and publication.
-    // Re-enabling must wait for a new draw rather than replay old noise.
+    // Re-enabling must wait for a new draw rather than replay an old lens effect.
     g_frame_screen_fx = {};
     std::lock_guard<std::mutex> lock(g_screen_fx_mutex);
     g_screen_fx = {};
@@ -8499,7 +8494,7 @@ void BuildFrameScene(uint8_t* base, const SubmitRecord* records, size_t count) {
   g_guest_base.store(base, std::memory_order_relaxed);
   ++g_guest_frame;  // paces the world-item cache revalidation
   // Screen effects advance even when this frame has no perspective view
-  // or no world items. A held world scene must not hold a noise fade too.
+  // or no world items. A held world scene must not retain an expired lens effect.
   const auto screen_fx = TakeScreenFxCapture(g_frame_screen_fx, g_guest_frame);
   {
     std::lock_guard<std::mutex> lock(g_screen_fx_mutex);
@@ -8679,7 +8674,6 @@ void BuildFrameScene(uint8_t* base, const SubmitRecord* records, size_t count) {
   }
 
   FrameScene scene;
-  scene.screen_fx = screen_fx;
   scene.items.reserve(count);
   std::unordered_set<uint32_t> seen;
   // Pre-size the per-frame bookkeeping: these fill with thousands of
@@ -10722,3 +10716,4 @@ extern "C" REX_FUNC(sub_82802A00) {
   }
   __imp__sub_82802A00(ctx, base);
 }
+

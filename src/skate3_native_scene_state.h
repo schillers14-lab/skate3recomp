@@ -38,7 +38,7 @@ inline std::mutex g_scene_mutex;
 inline std::shared_ptr<const FrameScene> g_scene;
 inline uint64_t g_generation = 0;
 // Final screen effects have their own publication lifetime. World scene
-// gaps (marker return, menus) must still advance or clear the effect.
+// gaps (menus or retained replay frames) must still advance or clear the effect.
 inline std::mutex g_screen_fx_mutex;
 inline FrameScene::ScreenFx g_screen_fx;
 // Guest render thread only, consumed once at every frame boundary.
