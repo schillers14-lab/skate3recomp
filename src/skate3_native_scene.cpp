@@ -3564,19 +3564,7 @@ bool CaptureHallOfMeatState(uint8_t* base, DrawItem& item) {
   }
   if (!HallOfMeatRowsValid(rows)) return false;
   const uint32_t dev = g_device.load(std::memory_order_relaxed);
-  // SetPending_RenderStates uploads separate packed Xenos register banks:
-  // bank 0x2200 is device+0x2934 (12 U32), and RB_COLOR_MASK is at
-  // device+0x28DC. The last-upload pointer g_rs_bank can refer to a different
-  // bank, so it cannot serve as a full D3DRS-indexed state array.
-  std::array<uint32_t, 12> rs_values{};
-  uint32_t color_mask;
-  if (dev == 0 ||
-      !GuestTryCopy(rs_values.data(), base + dev + 0x2934, sizeof(rs_values)) ||
-      !GuestTryCopy(&color_mask, base + dev + 0x28DC, sizeof(color_mask))) {
-    return false;
-  }
-  for (auto& v : rs_values) v = BSwap32(v);
-  color_mask = BSwap32(color_mask);
+  if (dev == 0) return false;
   // The HoM shader samples tf3, not the CAC diffuse slot. Require its own
   // binding before committing any HoM metadata, including runtime textures
   // that have no material-channel object.
@@ -3586,11 +3574,6 @@ bool CaptureHallOfMeatState(uint8_t* base, DrawItem& item) {
   }
   for (unsigned i = 0; i < 6; ++i) fetch[i] = BSwap32(fetch[i]);
   if (!HallOfMeatFetchValid(fetch)) return false;
-  item.hom_states[0] = rs_values[0];
-  item.hom_states[1] = rs_values[1];
-  item.hom_states[2] = rs_values[2];
-  item.hom_states[3] = rs_values[5];
-  item.hom_states[4] = color_mask;
   item.hall_of_meat = true;
   item.char_family = 0;
   std::memcpy(item.hom_rows, rows, sizeof(rows));
@@ -8820,7 +8803,6 @@ void BuildFrameScene(uint8_t* base, const SubmitRecord* records, size_t count) {
           cur.bones = cand.bones;
           cur.hall_of_meat = cand.hall_of_meat;
           std::memcpy(cur.hom_rows, cand.hom_rows, sizeof(cur.hom_rows));
-          std::memcpy(cur.hom_states, cand.hom_states, sizeof(cur.hom_states));
           if (cur.hall_of_meat) {
             std::memcpy(cur.diffuse_fetch, cand.diffuse_fetch, sizeof(cur.diffuse_fetch));
           }
@@ -8836,7 +8818,6 @@ void BuildFrameScene(uint8_t* base, const SubmitRecord* records, size_t count) {
           cur.bones = state.bones;
           cur.hall_of_meat = state.hall_of_meat;
           std::memcpy(cur.hom_rows, state.hom_rows, sizeof(cur.hom_rows));
-          std::memcpy(cur.hom_states, state.hom_states, sizeof(cur.hom_states));
           if (cur.hall_of_meat) {
             std::memcpy(cur.diffuse_fetch, state.diffuse_fetch, sizeof(cur.diffuse_fetch));
           }

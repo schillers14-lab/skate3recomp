@@ -3602,8 +3602,7 @@ bool EnsurePhotoFxPipeline(const NativeGuestOutputRenderContext& context) {
   return true;
 }
 
-// The normal final-screen shader also runs during gameplay, replay and the
-// marker-return transition. It needs only its own layout, a full-size input
+// The final lens shader also runs during gameplay and replay. It needs only its own layout, a full-size input
 // copy and one constant slice; creating the complete photo chain here would
 // allocate unused depth, DOF and grade resources.
 bool DecodeScreenFxBlend(const FrameScene::ScreenFx& fx,

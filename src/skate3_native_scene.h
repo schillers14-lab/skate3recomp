@@ -124,9 +124,6 @@ struct DrawItem {
   bool hall_of_meat = false;
   // PS c1..c4 (material, bone color, color parameters), VS c5/c6 (fog).
   float hom_rows[24] = {};
-  // Packed Xenos depth, blend, color-control, cull and color-mask state
-  // sampled from the device cache while the exact HoM draw owns it.
-  uint32_t hom_states[5] = {};
   // Hair strand coverage: the hair mesh's "alpha" channel texture, sampled
   // at the SECOND texcoord (raw float2); hair renders alpha-blended in the
   // sorted sub-pass (the opaque path is the blocky-helmet look).
