@@ -48,7 +48,6 @@ inline bool GraftHallOfMeatState(Item& geometry, const Item& state) {
   geometry.hall_of_meat = true;
   geometry.char_family = 0;
   std::memcpy(geometry.hom_rows, state.hom_rows, sizeof(geometry.hom_rows));
-  std::memcpy(geometry.hom_states, state.hom_states, sizeof(geometry.hom_states));
   std::memcpy(geometry.diffuse_fetch, state.diffuse_fetch,
               sizeof(geometry.diffuse_fetch));
   geometry.bones = state.bones;

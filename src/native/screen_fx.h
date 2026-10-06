@@ -6,7 +6,7 @@
 
 namespace skate3::native_scene {
 
-enum class ScreenFxVariant : uint8_t { kNone, kOpaque, kAlpha, kNoise };
+enum class ScreenFxVariant : uint8_t { kNone, kOpaque, kAlpha };
 enum class ScreenFxVertex : uint8_t { kNone, kRaw, kScaled };
 
 // Retail D3D constructors copy the compiled metadata after different
@@ -43,9 +43,6 @@ inline ScreenFxVariant ClassifyScreenFxPixelShader(std::string_view path) {
   if (leaf == "postfx_basictex_fisheyePS.updb") {
     return ScreenFxVariant::kAlpha;
   }
-  if (leaf == "postfx_basictex_fisheye_noisePS.updb") {
-    return ScreenFxVariant::kNoise;
-  }
   return ScreenFxVariant::kNone;
 }
 
@@ -56,31 +53,16 @@ inline ScreenFxVertex ClassifyScreenFxVertexShader(std::string_view path) {
   return ScreenFxVertex::kNone;
 }
 
-struct ScreenFxShaderPair {
-  ScreenFxVariant variant = ScreenFxVariant::kNone;
-  ScreenFxVertex vertex = ScreenFxVertex::kNone;
-};
-
-inline ScreenFxShaderPair ClassifyScreenFxShaderPair(std::string_view first,
-                                                    std::string_view second) {
-  auto variant = ClassifyScreenFxPixelShader(first);
-  if (variant != ScreenFxVariant::kNone) {
-    return {variant, ClassifyScreenFxVertexShader(second)};
-  }
-  return {ClassifyScreenFxPixelShader(second),
-          ClassifyScreenFxVertexShader(first)};
-}
-
 struct ScreenFxState {
   ScreenFxVariant variant = ScreenFxVariant::kNone;
   bool scaled_uv = false;
   uint64_t generation = 0;
-  float ps[32][4] = {};
-  float vs[8][4] = {};
-  uint32_t fetch[8][6] = {};
-  // Packed Xenos bank 0x2200 (device+0x2934), including blend control,
+  float ps[3][4] = {};
+  float vs[4][4] = {};
+  uint32_t fetch[3][6] = {};
+  // First three words of Xenos bank 0x2200 (device+0x2934), including blend control,
   // plus RB_COLOR_MASK (device+0x28DC). Preserve the draw's own state.
-  uint32_t render_states[12] = {};
+  uint32_t render_states[3] = {};
   uint32_t color_mask = 0;
 };
 
@@ -101,8 +83,7 @@ inline float ScreenFxBaseMapLod(const uint32_t fetch[6]) {
 
 inline bool ScreenFxCaptureValid(const ScreenFxState& state) {
   if (state.variant != ScreenFxVariant::kOpaque &&
-      state.variant != ScreenFxVariant::kAlpha &&
-      state.variant != ScreenFxVariant::kNoise) {
+      state.variant != ScreenFxVariant::kAlpha) {
     return false;
   }
   // Validate only lanes the retail shaders consume. Unwritten lanes in
@@ -122,20 +103,12 @@ inline bool ScreenFxCaptureValid(const ScreenFxState& state) {
       !ScreenFxTextureFetchValid(state.fetch[2])) {
     return false;
   }
-  if (state.variant == ScreenFxVariant::kNoise) {
-    constexpr unsigned noise_lanes[] = {12, 13, 14, 15, 16, 17,
-                                        20, 21, 22, 23, 24, 25, 26, 27};
-    for (unsigned lane : noise_lanes) {
-      if (!std::isfinite(state.ps[lane / 4][lane % 4])) return false;
-    }
-    if (!ScreenFxTextureFetchValid(state.fetch[5])) return false;
-  }
   return true;
 }
 
 // Every guest frame consumes and clears its own capture, including frames
 // without a world submission. The next frame cannot inherit an old lens
-// or a marker transition's final noise amount.
+// after the lens effect has ended.
 inline ScreenFxState TakeScreenFxCapture(ScreenFxState& pending,
                                          uint64_t generation) {
   ScreenFxState current;

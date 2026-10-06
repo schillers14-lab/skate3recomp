@@ -208,7 +208,6 @@ void WriteRecording(const char* dir, const char* stem) {
           << "\",\"dbg_src\":" << int(d.dbg_src)
           << ",\"ropa\":" << (d.ropa ? 1 : 0)
           << ",\"fam\":" << int(d.char_family)
-          << ",\"hom\":" << (d.hall_of_meat ? 1 : 0)
           << ",\"caster\":" << (d.caster_bank ? 1 : 0)
           << ",\"retained\":" << (d.retained ? 1 : 0) << ",\"world\":[";
       for (int i = 0; i < 16; ++i) out << (i ? "," : "") << d.world[i];
@@ -220,23 +219,7 @@ void WriteRecording(const char* dir, const char* stem) {
       }
       out << "],\"bones\":[";
       for (size_t i = 0; i < d.bones.size(); ++i) out << (i ? "," : "") << d.bones[i];
-      out << "]";
-      if (d.hall_of_meat) {
-        out << ",\"hom_states\":[";
-        for (unsigned i = 0; i < 5; ++i) {
-          if (i != 0) out << ',';
-          out << d.hom_states[i];
-        }
-        out << ']';
-        out << ",\"hom_rows\":[";
-        for (size_t i = 0; i < 24; ++i) {
-          if (i) out << ",";
-          if (std::isfinite(d.hom_rows[i])) out << d.hom_rows[i];
-          else out << "null";  // unused, unwritten guest lanes
-        }
-        out << "]";
-      }
-      out << "}";
+      out << "]}";
     };
     for (const RecordedFrame& rf : g_recorded_frames) {
       out << "{\"generation\":" << rf.generation << ",\"cam\":[" << rf.cam_pos[0] << ","
@@ -1005,3 +988,4 @@ void OnCaptureFrameEnd(uint8_t* base, uint64_t frame_index,
 }
 
 }  // namespace skate3::native_scene
+
