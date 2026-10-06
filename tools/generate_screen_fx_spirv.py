@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate only the five final screen effects SPIR-V blobs in the native header.
+"""Regenerate only the four final screen effects SPIR-V blobs in the native header.
 
 Run from any directory:
   python tools/generate_screen_fx_spirv.py --dxc /path/to/dxc --check
@@ -8,7 +8,7 @@ Run from any directory:
 DXC 1.9.2602.17 (21d28f727) reproduces the checked-in screen effects blobs. Other
 compiler versions may generate different valid bytecode; --check reports
 that difference without writing. This tool never regenerates other shaders.
-Its first run adds five lookup rows; subsequent runs preserve the whole lookup
+Its first run adds four lookup rows; subsequent runs preserve the whole lookup
 table. Only Python's standard library is needed.
 """
 
@@ -31,12 +31,12 @@ END = "// SCREEN_FX_GENERATED_END"
 
 # register -> (descriptor set, binding). These match the native RHI layout.
 BINDINGS = {
-    "b0": (0, 0), "s0": (0, 1), "s1": (0, 2), "s2": (0, 3),
-    **{f"t{index}": (1, index) for index in range(8)},
+    "b0": (0, 0), "s0": (0, 1),
+    **{f"t{index}": (1, index) for index in range(3)},
 }
 RESOURCE_BINDINGS = {
-    "Consts": (0, 0), "s_lin": (0, 1), "s_pt": (0, 2), "s_wrap": (0, 3),
-    **{f"t{index}": (1, index) for index in range(8)},
+    "Consts": (0, 0), "s_lin": (0, 1),
+    **{f"t{index}": (1, index) for index in range(3)},
 }
 # entry, shader model, canonical runtime macro signature, C++ array name.
 MATRIX = (
@@ -44,7 +44,6 @@ MATRIX = (
     ("vs_scaled", "vs_6_0", "", "k_screen_fx_vs_scaled"),
     ("ps_opaque", "ps_6_0", "", "k_screen_fx_ps_opaque"),
     ("ps_alpha", "ps_6_0", "", "k_screen_fx_ps_alpha"),
-    ("ps_noise", "ps_6_0", "", "k_screen_fx_ps_noise"),
 )
 SCREEN_FX_NAMES = {request[3] for request in MATRIX}
 ARRAY_PATTERN = re.compile(
@@ -264,7 +263,7 @@ def main(argv=None):
         raise ValueError("Header changed during compilation; refusing to overwrite or check stale contents")
     if not options.check and changed:
         write_atomic(header, updated)
-    print(f"{'DIFF' if options.check and changed else 'PASS'}: five screen effects blobs compiled; "
+    print(f"{'DIFF' if options.check and changed else 'PASS'}: four screen effects blobs compiled; "
           f"{preserved_count} existing blobs and lookup table preserved")
     print("header SHA256: " + digest(updated))
     for _, _, variant, name in MATRIX:
