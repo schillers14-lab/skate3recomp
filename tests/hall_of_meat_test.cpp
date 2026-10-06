@@ -17,7 +17,6 @@ struct Item {
   unsigned ctx = 1, mesh = 2, char_family = 2;
   unsigned vb_obj = 3, ib_obj = 4, stride = 56;
   unsigned diffuse_fetch[6] = {};
-  unsigned hom_states[5] = {};
   float hom_rows[24] = {}, world[16] = {};
   std::vector<float> bones;
   unsigned geometry_indices = 0;
@@ -28,7 +27,6 @@ void TestMerge() {
   hom.hall_of_meat = true;
   hom.hom_rows[8] = 1.0f;
   hom.diffuse_fetch[1] = 123;
-  hom.hom_states[1] = 0x00010001;
   hom.bones = {4.0f, 5.0f};
   hom.world[12] = 6.0f;
   Item generic;
@@ -37,7 +35,6 @@ void TestMerge() {
   assert(generic.hall_of_meat && generic.char_family == 0);
   assert(generic.geometry_indices == 99);  // fuller geometry is preserved
   assert(generic.hom_rows[8] == 1.0f && generic.diffuse_fetch[1] == 123);
-  assert(generic.hom_states[1] == 0x00010001);
   assert(generic.bones == hom.bones && generic.world[12] == 6.0f);
   Item later_generic;
   later_generic.geometry_indices = 111;

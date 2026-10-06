@@ -11,12 +11,11 @@ ScreenFxState ValidCapture(ScreenFxVariant variant) {
   state.variant = variant;
   state.scaled_uv = true;
   state.vs[3][0] = state.vs[3][1] = 1.0f;
-  for (unsigned slot : {0u, 2u, 5u}) {
+  for (unsigned slot : {0u, 2u}) {
     state.fetch[slot][0] = 2;
     state.fetch[slot][1] = 0x100054;
   }
   state.ps[1][1] = 1.0f;
-  state.ps[4][0] = 1.0f;
   return state;
 }
 
@@ -40,7 +39,7 @@ void TestShaderIdentity() {
       "D:\\shaders\\postfx_basictex_fisheye_opaquePS.updb") ==
       ScreenFxVariant::kOpaque);
   assert(ClassifyScreenFxPixelShader(
-      "/shaders/postfx_basictex_fisheye_noisePS.updb") == ScreenFxVariant::kNoise);
+      "/shaders/postfx_basictex_fisheye_noisePS.updb") == ScreenFxVariant::kNone);
   assert(ClassifyScreenFxPixelShader("postfx_basictex_fisheyePS.updb") ==
       ScreenFxVariant::kAlpha);
   for (const char* path : {
@@ -50,17 +49,12 @@ void TestShaderIdentity() {
       "postfx_basictex_fisheyeVS.updb", "postfx_basictex.updb", ""}) {
     assert(ClassifyScreenFxPixelShader(path) == ScreenFxVariant::kNone);
   }
-  auto pair = ClassifyScreenFxShaderPair(
-      "postfx_quadTransformVS.updb", "postfx_basictex_fisheye_noisePS.updb");
-  assert(pair.variant == ScreenFxVariant::kNoise &&
-         pair.vertex == ScreenFxVertex::kScaled);
-  pair = ClassifyScreenFxShaderPair(
-      "postfx_basictex_fisheyePS.updb", "postfx_defaultVS.updb");
-  assert(pair.variant == ScreenFxVariant::kAlpha &&
-         pair.vertex == ScreenFxVertex::kRaw);
-  pair = ClassifyScreenFxShaderPair(
-      "postfx_basictex_fisheyePS.updb", "prefix_postfx_quadTransformVS.updb");
-  assert(pair.vertex == ScreenFxVertex::kNone);
+  assert(ClassifyScreenFxVertexShader("postfx_quadTransformVS.updb") ==
+         ScreenFxVertex::kScaled);
+  assert(ClassifyScreenFxVertexShader("postfx_defaultVS.updb") ==
+         ScreenFxVertex::kRaw);
+  assert(ClassifyScreenFxVertexShader("prefix_postfx_quadTransformVS.updb") ==
+         ScreenFxVertex::kNone);
   // Re-reading a recycled object must distinguish its new leaf every time.
   assert(ClassifyScreenFxPixelShader("postfx_basictex_fisheyePS.updb") !=
          ClassifyScreenFxPixelShader("postfx_basictex_fisheye_noisePS.updb"));
@@ -68,12 +62,11 @@ void TestShaderIdentity() {
 
 void TestBindingsAndUsedLanes() {
   const float invalid = std::numeric_limits<float>::quiet_NaN();
-  for (auto variant : {ScreenFxVariant::kOpaque, ScreenFxVariant::kAlpha,
-                       ScreenFxVariant::kNoise}) {
+  for (auto variant : {ScreenFxVariant::kOpaque, ScreenFxVariant::kAlpha}) {
     auto state = ValidCapture(variant);
     assert(ScreenFxCaptureValid(state));
     state.ps[0][2] = state.ps[1][3] = state.ps[2][0] = invalid;
-    state.ps[31][3] = state.vs[7][3] = invalid;
+    state.ps[2][3] = state.vs[3][3] = invalid;
     assert(ScreenFxCaptureValid(state));
     for (unsigned lane : {0u, 1u, 3u, 4u, 5u, 6u, 9u}) {
       auto bad = state;
@@ -98,41 +91,30 @@ void TestBindingsAndUsedLanes() {
     bad.vs[2][0] = invalid;
     assert(ScreenFxCaptureValid(bad));
   }
-  auto noise = ValidCapture(ScreenFxVariant::kNoise);
-  for (unsigned lane : {12u, 13u, 14u, 15u, 16u, 17u,
-                        20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u}) {
-    auto bad = noise;
-    bad.ps[lane / 4][lane % 4] = invalid;
-    assert(!ScreenFxCaptureValid(bad));
-  }
-  noise.fetch[5][1] = 0x54;
-  assert(!ScreenFxCaptureValid(noise));
-  noise.variant = ScreenFxVariant::kOpaque;
-  noise.ps[5][0] = invalid;  // other variants do not sample noise
-  assert(ScreenFxCaptureValid(noise));
+
 }
 
 void TestFrameExpiration() {
-  auto pending = ValidCapture(ScreenFxVariant::kNoise);
-  pending.ps[4][0] = 0.2f;
-  pending.ps[4][1] = 0.8f;
+  auto pending = ValidCapture(ScreenFxVariant::kAlpha);
+  pending.ps[0][0] = 0.2f;
+  pending.ps[0][1] = 0.8f;
   pending.render_states[1] = 0x00010001;
   pending.color_mask = 0xf;
   auto first = TakeScreenFxCapture(pending, 41);
-  assert(first.variant == ScreenFxVariant::kNoise && first.generation == 41);
-  assert(first.ps[4][1] == 0.8f && first.fetch[5][1] == 0x100054);
+  assert(first.variant == ScreenFxVariant::kAlpha && first.generation == 41);
+  assert(first.ps[0][1] == 0.8f && first.fetch[2][1] == 0x100054);
   assert(first.render_states[1] == 0x00010001 && first.color_mask == 0xf);
   assert(pending.variant == ScreenFxVariant::kNone);
   // The world can be held while the independent effect changes or ends.
   const auto held_world_effect = first;
   auto second = TakeScreenFxCapture(pending, 42);
-  assert(held_world_effect.variant == ScreenFxVariant::kNoise);
+  assert(held_world_effect.variant == ScreenFxVariant::kAlpha);
   assert(second.variant == ScreenFxVariant::kNone && second.generation == 42);
   pending = ValidCapture(ScreenFxVariant::kOpaque);
   auto third = TakeScreenFxCapture(pending, 43);
   assert(third.variant == ScreenFxVariant::kOpaque && third.generation == 43);
-  pending = ValidCapture(ScreenFxVariant::kNoise);
-  pending.fetch[5][1] = 0;
+  pending = ValidCapture(ScreenFxVariant::kAlpha);
+  pending.fetch[2][1] = 0;
   auto missing_binding = TakeScreenFxCapture(pending, 44);
   assert(missing_binding.variant == ScreenFxVariant::kNone);
   assert(pending.variant == ScreenFxVariant::kNone);
@@ -175,6 +157,6 @@ int main() {
   TestBindingsAndUsedLanes();
   TestFrameExpiration();
   TestBaseMapSamplerLod();
-  std::cout << "PASS: exact screen shader pairing, used lanes/bindings, "
+  std::cout << "PASS: exact screen shader identities, used lanes/bindings, "
                "independent frame expiration, and BaseMap sampler LOD\n";
 }

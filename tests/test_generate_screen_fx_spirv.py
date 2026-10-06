@@ -24,7 +24,6 @@ EXPECTED_MATRIX = (
     ("vs_scaled", "vs_6_0", "", "k_screen_fx_vs_scaled"),
     ("ps_opaque", "ps_6_0", "", "k_screen_fx_ps_opaque"),
     ("ps_alpha", "ps_6_0", "", "k_screen_fx_ps_alpha"),
-    ("ps_noise", "ps_6_0", "", "k_screen_fx_ps_noise"),
 )
 OWN_NAMES = {request[3] for request in EXPECTED_MATRIX}
 
@@ -132,7 +131,7 @@ class GeneratorTest(unittest.TestCase):
                 arrays = GEN.validate_header(text)
                 self.assertEqual({name: arrays[name] for name in old_blobs}, old_blobs)
                 self.assertEqual({name: arrays[name] for name in OWN_NAMES}, blobs)
-                self.assertEqual(len(arrays), 85)
+                self.assertEqual(len(arrays), 84)
                 self.assertIn(old_lookup, text)
                 self.assertEqual(text.count("// HOM_GENERATED_START"), 1)
                 start, end = GEN.block_bounds(text)
@@ -166,7 +165,7 @@ class GeneratorTest(unittest.TestCase):
 
     def test_subsequent_update_changes_only_own_block(self):
         original, blobs, old_blobs, _ = fixture()
-        blobs["k_screen_fx_ps_noise"] = struct.pack("<II", 0x12345678, 0x87654321)
+        blobs["k_screen_fx_ps_alpha"] = struct.pack("<II", 0x12345678, 0x87654321)
         updated, count = GEN.replace_block(original, blobs, "new compiler")
         before, after = original.decode(), updated.decode()
         old_start, old_end = GEN.block_bounds(before)
@@ -182,7 +181,7 @@ class GeneratorTest(unittest.TestCase):
         text = original.decode()
         self.assertIn(lookup_row("vs_raw", "", "k_photo_fx_vs_raw", "photo_fx.hlsl"), text)
         self.assertIn(lookup_row("vs_scaled", "", "k_photo_fx_vs_scaled", "photo_fx.hlsl"), text)
-        self.assertEqual(len(GEN.validate_header(text)), 85)
+        self.assertEqual(len(GEN.validate_header(text)), 84)
 
     def test_missing_duplicate_and_reversed_markers_fail(self):
         original, _, _, _ = fixture()
@@ -204,7 +203,7 @@ class GeneratorTest(unittest.TestCase):
         missing = text.replace("static const uint32_t k_screen_fx_vs_raw[]",
                                "static const uint32_t k_unowned_vs_raw[]")
         extras = ("static const uint32_t k_existing_000[] = {\n0x00000000,\n};\n",
-                  "static const uint32_t k_screen_fx_ps_noise[] = {\n0x00000000,\n};\n",
+                  "static const uint32_t k_screen_fx_ps_alpha[] = {\n0x00000000,\n};\n",
                   "static const uint32_t k_screen_fx_unknown[] = {\n0x00000000,\n};\n")
         for bad in (missing, *(text + extra for extra in extras)):
             with self.assertRaises(ValueError):
@@ -225,8 +224,8 @@ class GeneratorTest(unittest.TestCase):
                     GEN.validate_header(text.replace(row, replacement))
 
     def test_reflection_accepts_both_stages_and_frozen_named_bindings(self):
-        resources = (("Consts", 0, 0), ("s_lin", 0, 1), ("s_pt", 0, 2), ("s_wrap", 0, 3))
-        resources += tuple((f"t{index}", 1, index) for index in range(8))
+        resources = (("Consts", 0, 0), ("s_lin", 0, 1))
+        resources += tuple((f"t{index}", 1, index) for index in range(3))
         for entry, profile, _, _ in EXPECTED_MATRIX:
             with self.subTest(entry=entry):
                 model = 0 if profile.startswith("vs_") else 4
@@ -268,7 +267,7 @@ class GeneratorTest(unittest.TestCase):
             with self.subTest(installed=installed, different=different):
                 original, blobs, _, _ = fixture(installed=installed)
                 if different:
-                    blobs["k_screen_fx_ps_noise"] = struct.pack("<I", 0x12345678)
+                    blobs["k_screen_fx_ps_alpha"] = struct.pack("<I", 0x12345678)
                 with tempfile.TemporaryDirectory() as directory:
                     header = Path(directory) / "header.h"
                     header.write_bytes(original)
